@@ -2,28 +2,31 @@
 Django settings for hotelapp project.
 """
 import os
-import dj_database_url # NEW: Database connection helper
+import dj_database_url
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Quick-start development settings - unsuitable for production
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-a#v2bu#7^dmdm&)h=9*%q+j*v7v_&!()*sty=f(n=05=g%opmh')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# RENDER par debug False rahega, local par True
-DEBUG = 'RENDER' not in os.environ
+# Agar Render par ho toh DEBUG False hoga, local par True.
+DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true' if 'RENDER' in os.environ else True
 
-# ALLOWED_HOSTS configuration for Render
-ALLOWED_HOSTS = []
+# ALLOWED_HOSTS configuration for Render and Local
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0']
+
+# Render auto-hostname detection
 render_external_hostname = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if render_external_hostname:
     ALLOWED_HOSTS.append(render_external_hostname)
-else:
-    ALLOWED_HOSTS.append('127.0.0.1')
-    ALLOWED_HOSTS.append('localhost')
+
+# Add any custom domain if needed via environment variable
+extra_hosts = os.environ.get('ALLOWED_HOSTS')
+if extra_hosts:
+    ALLOWED_HOSTS.extend(extra_hosts.split(','))
 
 
 # Application definition
@@ -40,7 +43,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware', # NEW: Serve static files in production
+    'whitenoise.middleware.WhiteNoiseMiddleware', # Serve static files in production
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -69,7 +72,7 @@ TEMPLATES = [
 WSGI_APPLICATION = 'hotelapp.wsgi.application'
 
 
-# Database Configuration (NEW: Auto-switch between SQLite and PostgreSQL)
+# Database Configuration (Auto-switch between SQLite and PostgreSQL)
 DATABASES = {
     'default': dj_database_url.config(
         default='sqlite:///' + os.path.join(BASE_DIR, 'db.sqlite3'),
@@ -105,10 +108,13 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
-# NEW: Production static files location
+
+# Production static files location
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-# NEW: WhiteNoise storage optimization
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# WhiteNoise storage optimization for Render
+if not DEBUG:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
