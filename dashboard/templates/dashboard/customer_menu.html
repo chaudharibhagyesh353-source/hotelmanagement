@@ -49,7 +49,7 @@
         <div class="brand-logo-circle">{{ owner.username|slice:":1"|upper }}</div>
         <h3 class="mb-1 fw-bold text-uppercase" style="letter-spacing: 1px;">{{ owner.username }}</h3>
         <span class="badge bg-white bg-opacity-25 border border-white border-opacity-50 rounded-pill px-3 py-2 small">
-            <i class="bi bi-geo-alt-fill me-1"></i> TABLE {{ table.number }}
+            <i class="bi bi-geo-alt-fill me-1"></i> {{ table.name }}
         </span>
     </div>
 
@@ -167,7 +167,8 @@
     <script>
         let cart = [];
         const hotelUsername = "{{ owner.username }}";
-        const tableNumber = {{ table.number }};
+        // UPDATED: tableNumber is now a string constant from table.name
+        const tableName = "{{ table.name|escapejs }}";
 
         function filterMenu(category, badgeEl) {
             document.querySelectorAll('.cat-badge').forEach(b => b.classList.remove('active'));
@@ -236,8 +237,11 @@
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    username: hotelUsername, table_num: tableNumber, 
-                    phone_number: phone, items: groupedItems, 
+                    username: hotelUsername, 
+                    // UPDATED: Passing tableName (string) instead of tableNumber
+                    table_num: tableName, 
+                    phone_number: phone, 
+                    items: groupedItems, 
                     total: cart.reduce((s, i) => s + i.price, 0)
                 })
             })

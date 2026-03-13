@@ -1,7 +1,7 @@
 from django.urls import path
 from django.contrib.auth import views as auth_views
-from django.conf import settings # NEW IMPORT
-from django.conf.urls.static import static # NEW IMPORT
+from django.conf import settings
+from django.conf.urls.static import static
 from . import views
 
 urlpatterns = [
@@ -23,7 +23,7 @@ urlpatterns = [
     # Permanent record management for manager insights
     path('history/', views.order_history, name='order_history'),
 
-    # 3. Password Reset Flow (Full setup preserved)
+    # 3. Password Reset Flow (FIXED: Corrected PasswordResetDoneView)
     path('password-reset/', 
          auth_views.PasswordResetView.as_view(template_name='dashboard/password_reset.html'), 
          name='password_reset'),
@@ -37,8 +37,8 @@ urlpatterns = [
          auth_views.PasswordResetCompleteView.as_view(template_name='dashboard/password_reset_complete.html'), 
          name='password_reset_complete'),
 
-    # 4. QR Ordering & SaaS APIs
-    path('order/<str:username>/<int:table_num>/', views.customer_menu, name='customer_menu'),
+    # 4. QR Ordering & SaaS APIs (Using <str:> to allow name-based table URLs)
+    path('order/<str:username>/<str:table_name>/', views.customer_menu, name='customer_menu'),
     path('api/place-order/', views.place_order_api, name='place_order_api'),
     path('api/latest-orders/', views.latest_orders_api, name='latest_orders_api'),
     
@@ -46,7 +46,7 @@ urlpatterns = [
     path('kitchen/', views.kitchen_orders, name='kitchen_orders'),
     path('api/update-order-status/<int:order_id>/', views.update_order_status, name='update_status'),
     
-    # CRITICAL: These paths solve the Edit/Cancel button issue in KDS
+    # APIs for KDS Order Details & Editing
     path('api/get-order-details/<int:order_id>/', views.get_order_details_api, name='get_order_details_api'),
     path('api/edit-order/<int:order_id>/', views.edit_order_api, name='edit_order_api'),
 
@@ -54,6 +54,6 @@ urlpatterns = [
     path('api/settle-bill/', views.settle_bill_api, name='settle_bill_api'),
 ]
 
-# --- THE FIX: Serving Media Files in Development ---
+# Serving Media Files (Images for Menu Items)
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

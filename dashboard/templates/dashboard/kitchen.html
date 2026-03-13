@@ -28,7 +28,7 @@
                     {% elif order.status == 'preparing' %}bg-warning text-dark
                     {% elif order.status == 'cooked' %}bg-info text-white
                     {% else %}bg-success text-white{% endif %}">
-                    <h5 class="mb-0 fw-bold">Table {{ order.table.number }}</h5>
+                    <h5 class="mb-0 fw-bold">{{ order.table.name }}</h5>
                     
                     <div class="d-flex align-items-center gap-2">
                         <button class="btn btn-sm btn-light border-0 py-0 px-2" style="height:24px;" onclick="openEditModal('{{ order.id }}')">
@@ -86,8 +86,8 @@
                         <label class="fw-bold mb-2 small text-muted">1. SELECT TABLE</label>
                         <div class="d-flex gap-2 mb-4 overflow-auto pb-2" id="staffTablePicker">
                             {% for t in tables %}
-                            <input type="radio" class="btn-check" name="staffTableRadio" id="t{{ t.number }}" value="{{ t.number }}" {% if forloop.first %}checked{% endif %}>
-                            <label class="btn btn-outline-primary fw-bold px-3" for="t{{ t.number }}">T{{ t.number }}</label>
+                            <input type="radio" class="btn-check" name="staffTableRadio" id="t{{ forloop.counter }}" value="{{ t.name }}" {% if forloop.first %}checked{% endif %}>
+                            <label class="btn btn-outline-primary fw-bold px-3" for="t{{ forloop.counter }}">{{ t.name }}</label>
                             {% empty %}
                             <p class="text-muted small">No tables configured.</p>
                             {% endfor %}
@@ -224,18 +224,18 @@ function renderAllKitchenOrders() {
 document.addEventListener('DOMContentLoaded', renderAllKitchenOrders);
 
 /**
- * Auto-refresh Live Feed (Every 30 seconds)
+ * Auto-refresh Live Feed (Every 30 seconds visual indicator)
  */
 setInterval(() => {
-    // Optionally trigger a silent fetch here if you don't want a full reload
-    // For now, simple visual feedback
     const dot = document.querySelector('#refresh-status i');
-    dot.classList.toggle('text-success');
-    dot.classList.toggle('text-warning');
+    if(dot) {
+        dot.classList.toggle('text-success');
+        dot.classList.toggle('text-warning');
+    }
 }, 5000);
 
 /**
- * FIXED STAFF ORDERING (Ownership Safe)
+ * FIXED STAFF ORDERING (Uses Table Name)
  */
 function placeStaffOrder() {
     if(staffCart.length === 0) { alert("Cart is empty!"); return; }
@@ -249,8 +249,7 @@ function placeStaffOrder() {
             'X-CSRFToken': '{{ csrf_token }}'
         },
         body: JSON.stringify({
-            // REMOVED username: Backend derives owner from session for staff
-            table_num: selectedTable,
+            table_num: selectedTable, // Passes the Name string
             items: staffCart,
             total: parseFloat(document.getElementById('staffCartTotal').innerText)
         })
@@ -262,6 +261,9 @@ function placeStaffOrder() {
         }
     });
 }
+
+// ... Rest of functions handleItemClick, filterStaffItems, addToStaffCart, renderStaffCart, updateStaffQty, updateStatus, openEditModal, renderEditList, changeEditQty, saveEdits ...
+// (Functionality remains exactly the same as they were correctly implemented for items)
 
 function handleItemClick(item) {
     if (item.variants && item.variants.length > 0) {
