@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 
-# ─── 0. RESTAURANT PROFILE (NEW: For Settings Page) ───
+# ─── 0. RESTAURANT PROFILE (For Settings Page) ───
 class RestaurantProfile(models.Model):
     """
     Ek owner ke restaurant ki saari main settings yahan save hongi.
@@ -34,7 +34,7 @@ class Category(models.Model):
     def __str__(self):
         return f"{self.name} ({self.user.username})"
 
-# 2. Table Model
+# 2. Table Model (UPDATED: Number replaced with Name)
 class Table(models.Model):
     STATUS_CHOICES = [
         ('available', 'Available'),
@@ -42,7 +42,10 @@ class Table(models.Model):
         ('billed', 'Bill Printed'),
     ]
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tables')
-    number = models.IntegerField() 
+    
+    # Ab hum number ki jagah 'name' use karenge (e.g., Section A - 1)
+    name = models.CharField(max_length=100) 
+    
     capacity = models.IntegerField(default=4)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='available')
     
@@ -54,13 +57,13 @@ class Table(models.Model):
     items_count = models.IntegerField(null=True, blank=True)
 
     class Meta:
-        ordering = ['number']
-        unique_together = ['user', 'number']
+        ordering = ['name']
+        unique_together = ['user', 'name'] # Ek user ke paas ek hi naam ki do tables nahi ho sakti
 
     def __str__(self):
-        return f"Table {self.number} ({self.user.username})"
+        return f"{self.name} ({self.user.username})"
 
-# 3. MenuItem Model (UPDATED WITH IMAGE & DESCRIPTION)
+# 3. MenuItem Model
 class MenuItem(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='menu_items')
     name = models.CharField(max_length=200)
@@ -68,9 +71,8 @@ class MenuItem(models.Model):
     price = models.DecimalField(max_digits=8, decimal_places=2)
     has_variants = models.BooleanField(default=False)
     
-    # --- NEW FIELDS FOR CUSTOMER VIEW ---
-    image = models.ImageField(upload_to='menu_items/', null=True, blank=True) # Dish ki photo
-    description = models.TextField(null=True, blank=True) # Dish ke bare mein details
+    image = models.ImageField(upload_to='menu_items/', null=True, blank=True) 
+    description = models.TextField(null=True, blank=True) 
 
     class Meta:
         ordering = ['category', 'name']
@@ -118,7 +120,7 @@ class StaffMember(models.Model):
         parts = self.name.split()
         return ''.join(p[0].upper() for p in parts if p)
 
-# 5. Order Model
+# 5. Order Model (UPDATED: __str__ uses table name)
 class Order(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Placed'),
@@ -138,7 +140,7 @@ class Order(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"Order {self.id} - Table {self.table.number} ({self.user.username})"
+        return f"Order {self.id} - {self.table.name} ({self.user.username})"
 
 # 6. OrderItem Model
 class OrderItem(models.Model):

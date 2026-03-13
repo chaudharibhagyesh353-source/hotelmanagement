@@ -59,7 +59,7 @@
                     <div class="col">
                         <div class="table-cell {{ table.status }}" 
                             data-table-id="{{ table.id }}"
-                            data-table="{{ table.number }}" 
+                            data-table="{{ table.name }}" 
                             data-cap="{{ table.capacity }}"
                             data-status="{{ table.status }}" 
                             data-guests="{{ table.current_guests|default:0 }}"
@@ -69,7 +69,7 @@
                             data-qrlink="{{ table.qr_link }}"
                             onclick="selectTable(this)">
                             
-                            <div class="table-number">{{ table.number }}</div>
+                            <div class="table-number text-center px-1" style="font-size: 0.9rem;">{{ table.name }}</div>
                             <div class="table-seats">{{ table.capacity }} seats</div>
                         </div>
                     </div>
@@ -96,7 +96,7 @@
                 
                 <div id="detailContent" style="display:none;">
                     <div class="text-center pb-3 mb-3 border-bottom">
-                        <div class="fs-2 fw-bold text-dark" id="detailTitle">Table 1</div>
+                        <div class="fs-4 fw-bold text-dark" id="detailTitle">Table Name</div>
                         <span class="badge mt-1 px-3 py-2" id="detailBadge">Available</span>
                     </div>
 
@@ -165,8 +165,7 @@
             <table class="table table-hover align-middle">
                 <thead class="bg-light">
                     <tr>
-                        <th>Table #</th>
-                        <th>Capacity</th>
+                        <th>Table Name</th> <th>Capacity</th>
                         <th>Status</th>
                         <th>Ordering URL (QR Link)</th>
                         <th class="text-end">Actions</th>
@@ -175,7 +174,7 @@
                 <tbody>
                     {% for table in tables %}
                     <tr>
-                        <td class="fw-bold">Table {{ table.number }}</td>
+                        <td class="fw-bold">{{ table.name }}</td>
                         <td>{{ table.capacity }} Guests</td>
                         <td>
                             <span class="badge rounded-pill {% if table.status == 'available' %}bg-success-subtle text-success border border-success-subtle{% elif table.status == 'occupied' %}bg-danger-subtle text-danger border border-danger-subtle{% else %}bg-warning-subtle text-warning border border-warning-subtle{% endif %}">
@@ -190,7 +189,7 @@
                                 {% csrf_token %}
                                 <input type="hidden" name="action" value="delete_table">
                                 <input type="hidden" name="table_id" value="{{ table.id }}">
-                                <button type="submit" class="btn btn-sm btn-outline-danger border-0" onclick="return confirm('Delete Table {{ table.number }}?')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger border-0" onclick="return confirm('Delete Table {{ table.name }}?')">
                                     <i class="bi bi-trash3"></i>
                                 </button>
                             </form>
@@ -216,8 +215,8 @@
                 <div class="modal-body">
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label fw-bold small">Table Number</label>
-                            <input type="number" name="number" class="form-control" placeholder="e.g. 1" min="1" required>
+                            <label class="form-label fw-bold small">Table Name / Number</label>
+                            <input type="text" name="name" class="form-control" placeholder="e.g. Section A-1" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-bold small">Capacity</label>
@@ -250,7 +249,9 @@
         
         document.getElementById('detailEmpty').style.display = 'none';
         document.getElementById('detailContent').style.display = 'block';
-        document.getElementById('detailTitle').textContent = 'Table ' + data.table;
+        
+        // UPDATED: Now shows data.table (which contains table.name)
+        document.getElementById('detailTitle').textContent = data.table; 
         document.getElementById('detailCapacity').textContent = data.cap + ' guests';
         document.getElementById('deleteTableId').value = data.tableId;
         
@@ -289,13 +290,13 @@
 </script>
 
 <style>
-    .table-cell { transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; border-radius: 12px; height: 80px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; border: 2px solid #f1f5f9; position: relative; }
+    .table-cell { transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; border-radius: 12px; min-height: 80px; padding: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; border: 2px solid #f1f5f9; position: relative; }
     .table-cell:hover { transform: translateY(-3px); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
     .table-cell.selected { border-color: #0d6efd; background-color: #f0f7ff; }
     .table-cell.available { border-top: 5px solid #198754; }
     .table-cell.occupied { border-top: 5px solid #dc3545; }
     .table-cell.billed { border-top: 5px solid #ffc107; }
-    .table-number { font-size: 1.25rem; font-weight: 700; color: #1e293b; }
-    .table-seats { font-size: 0.7rem; color: #64748b; font-weight: 600; text-transform: uppercase; }
+    .table-number { font-size: 1rem; font-weight: 700; color: #1e293b; word-break: break-word; line-height: 1.2; }
+    .table-seats { font-size: 0.7rem; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 4px; }
 </style>
 {% endblock %}
