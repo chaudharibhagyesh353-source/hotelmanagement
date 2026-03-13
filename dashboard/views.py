@@ -10,7 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Sum
 from django.utils import timezone
 from django.contrib.auth.models import User 
-from django.contrib.auth import update_session_auth_hash # Password change ke baad session maintain rakhne ke liye
+from django.contrib.auth import update_session_auth_hash 
 from .models import Table, MenuItem, StaffMember, Order, Category, MenuItemVariant, RestaurantProfile
 
 # ─── HELPER: GET DATA OWNER (SaaS Logic) ───
@@ -103,7 +103,7 @@ def staff(request):
     }
     return render(request, 'dashboard/staff.html', context)
 
-# 4. Menu Manager (UPDATED: Added Image & Description support)
+# 4. Menu Manager
 @login_required
 @owner_only
 def menu_manager(request):
@@ -123,14 +123,13 @@ def menu_manager(request):
         
         elif action == 'add_item':
             cat = get_object_or_404(Category, id=request.POST.get('category_id'), user=request.user)
-            # Create item with description and image
             MenuItem.objects.create(
                 user=request.user, 
                 name=request.POST.get('name'), 
                 category=cat, 
                 price=float(request.POST.get('price', 0)),
-                description=request.POST.get('description'), # ADDED
-                image=request.FILES.get('image') # ADDED: Handles file upload
+                description=request.POST.get('description'),
+                image=request.FILES.get('image')
             )
         
         elif action == 'edit_item':
@@ -138,12 +137,9 @@ def menu_manager(request):
             item = get_object_or_404(MenuItem, id=item_id, user=request.user)
             item.name = request.POST.get('name')
             item.price = float(request.POST.get('price', 0))
-            item.description = request.POST.get('description') # ADDED
-            
-            # Update image only if a new one is uploaded
+            item.description = request.POST.get('description')
             if request.FILES.get('image'):
                 item.image = request.FILES.get('image')
-            
             item.save()
         
         elif action == 'add_variant':
@@ -218,31 +214,38 @@ def kitchen_orders(request):
     }
     return render(request, 'dashboard/kitchen.html', context)
 
-# 7. Floor Plan
+# 7. Floor Plan (UPDATED: Number to Name)
 @login_required
 @owner_only
 def floor_plan(request):
     if request.method == 'POST':
         action = request.POST.get('action')
         if action == 'add_table':
-            num = request.POST.get('number')
+            name = request.POST.get('name') # 'number' ki jagah 'name'
             domain = request.get_host()
-            link = f"http://{domain}/order/{request.user.username}/{num}/"
-            if num: Table.objects.get_or_create(user=request.user, number=int(num), defaults={'qr_link': link})
+            # Link generation ab name use karega
+            link = f"http://{domain}/order/{request.user.username}/{name}/"
+            if name: 
+                Table.objects.get_or_create(
+                    user=request.user, 
+                    name=name, 
+                    defaults={'qr_link': link, 'capacity': request.POST.get('capacity', 4)}
+                )
         elif action == 'delete_table':
             Table.objects.filter(id=request.POST.get('table_id'), user=request.user).delete()
         return redirect('floor_plan')
     context = {'tables': Table.objects.filter(user=request.user), 'active_page': 'floor_plan'}
     return render(request, 'dashboard/floor_plan.html', context)
 
-# 8. Order Placement API
+# 8. Order Placement API (UPDATED: Queries by Name)
 @csrf_exempt
 def place_order_api(request):
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
             owner = get_data_owner(request) if request.user.is_authenticated else User.objects.get(username=data['username'])
-            table = Table.objects.get(user=owner, number=data['table_num']) 
+            # 'number' field ko 'name' se badla gaya
+            table = Table.objects.get(user=owner, name=data['table_num']) 
             payload = {'items': data['items'], 'customer_phone': data.get('phone_number', 'Staff Order')}
             Order.objects.create(user=owner, table=table, items_json=json.dumps(payload), total_price=Decimal(str(data['total'])))
             table.status = 'occupied'
@@ -269,13 +272,14 @@ def billing_pos(request):
     }
     return render(request, 'dashboard/billing_pos.html', context)
 
-# 10. APIs and Utils
+# 10. APIs and Utils (UPDATED: Settle Bill queries by Name)
 @csrf_exempt
 @login_required
 def settle_bill_api(request):
     if request.method == 'POST':
         data = json.loads(request.body)
-        table = get_object_or_404(Table, user=request.user, number=data.get('table_num'))
+        # number ki jagah name
+        table = get_object_or_404(Table, user=request.user, name=data.get('table_num'))
         Order.objects.filter(user=request.user, table=table).exclude(status='served').update(status='served')
         table.status, table.current_amount, table.items_count = 'available', Decimal('0.00'), 0
         table.save()
@@ -314,9 +318,10 @@ def edit_order_api(request, order_id):
         return JsonResponse({'status': 'success'})
     return JsonResponse({'status': 'error'}, status=400)
 
-def customer_menu(request, username, table_num):
+# UPDATED: table_num rename to table_name for clarity
+def customer_menu(request, username, table_name):
     owner = get_object_or_404(User, username=username)
-    table = get_object_or_404(Table, user=owner, number=table_num)
+    table = get_object_or_404(Table, user=owner, name=table_name)
     return render(request, 'dashboard/customer_menu.html', {
         'table': table, 'owner': owner, 
         'menu_items': MenuItem.objects.filter(user=owner),
@@ -333,13 +338,19 @@ def order_history(request):
         history_list.append({'order': o, 'phone': data.get('customer_phone', 'N/A'), 'items': data.get('items', [])})
     return render(request, 'dashboard/history.html', {'history_data': history_list, 'active_page': 'history'})
 
+# UPDATED: Activity logging uses name
 @login_required
 def latest_orders_api(request):
     today = timezone.now().date()
     new_orders = Order.objects.filter(user=request.user, is_notified=False)
     new_activities = []
     for order in new_orders:
-        new_activities.append({'action': f"New Order: Table {order.table.number}", 'amount': f"{order.total_price}", 'table': order.table.number, 'id': order.id})
+        new_activities.append({
+            'action': f"New Order: Table {order.table.name}", 
+            'amount': f"{order.total_price}", 
+            'table': order.table.name, 
+            'id': order.id
+        })
         order.is_notified = True; order.save()
     total_sales = Order.objects.filter(user=request.user, status='served', created_at__date=today).aggregate(Sum('total_price'))['total_price__sum'] or 0
     return JsonResponse({'total_pending': Order.objects.filter(user=request.user, status='pending').count(), 'total_sales': float(total_sales), 'new_activities': new_activities})
