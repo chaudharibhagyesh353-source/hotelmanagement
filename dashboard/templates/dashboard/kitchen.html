@@ -1,0 +1,404 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}Kitchen Orders{% endblock %}
+{% block page_title %}Kitchen Display System (KDS){% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="fw-bold mb-0 text-primary"><i class="bi bi-fire me-2"></i>Live Kitchen Feed</h4>
+        <div class="d-flex gap-2">
+            <span class="badge bg-light text-muted d-flex align-items-center px-3 border" id="refresh-status">
+                <i class="bi bi-dot text-success fs-4"></i> Live
+            </span>
+            <button class="btn btn-outline-secondary btn-sm" onclick="location.reload()">
+                <i class="bi bi-arrow-clockwise me-1"></i> REFRESH
+            </button>
+            <button class="btn btn-primary fw-bold shadow-sm px-4" data-bs-toggle="modal" data-bs-target="#staffAddOrderModal">
+                <i class="bi bi-plus-circle me-1"></i> NEW ORDER
+            </button>
+        </div>
+    </div>
+
+    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-4" id="orders-grid">
+        {% for order in orders %}
+        <div class="col" id="order-card-{{ order.id }}">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header d-flex justify-content-between align-items-center 
+                    {% if order.status == 'pending' %}bg-primary text-white
+                    {% elif order.status == 'preparing' %}bg-warning text-dark
+                    {% elif order.status == 'cooked' %}bg-info text-white
+                    {% else %}bg-success text-white{% endif %}">
+                    <h5 class="mb-0 fw-bold">Table {{ order.table.number }}</h5>
+                    
+                    <div class="d-flex align-items-center gap-2">
+                        <button class="btn btn-sm btn-light border-0 py-0 px-2" style="height:24px;" onclick="openEditModal('{{ order.id }}')">
+                            <i class="bi bi-pencil-square text-dark" style="font-size: 0.9rem;"></i>
+                        </button>
+                        <span class="badge bg-white text-dark text-uppercase" style="font-size: 0.7rem;">{{ order.get_status_display }}</span>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <div class="small text-muted mb-2 d-flex justify-content-between">
+                        <span>Order ID: #{{ order.id }}</span>
+                        <span><i class="bi bi-clock me-1"></i>{{ order.created_at|time:"H:i" }}</span>
+                    </div>
+                    <hr class="my-2 opacity-10">
+                    
+                    <ul class="list-group list-group-flush mb-3">
+                        <div class="order-items-loader" 
+                             id="items-{{ order.id }}" 
+                             data-json='{{ order.items_json|safe }}'>
+                        </div>
+                    </ul>
+
+                    <div class="d-grid gap-2">
+                        {% if order.status == 'pending' %}
+                        <button class="btn btn-warning fw-bold shadow-sm" onclick="updateStatus('{{ order.id }}', 'preparing')">START COOKING</button>
+                        {% elif order.status == 'preparing' %}
+                        <button class="btn btn-info text-white fw-bold shadow-sm" onclick="updateStatus('{{ order.id }}', 'cooked')">MARK COOKED</button>
+                        {% elif order.status == 'cooked' %}
+                        <button class="btn btn-success fw-bold shadow-sm" onclick="updateStatus('{{ order.id }}', 'served')">MARK SERVED</button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="text-center py-5 w-100 text-muted">
+            <i class="bi bi-inbox fs-1 d-block mb-2 opacity-25"></i>
+            No active orders.
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="modal fade" id="staffAddOrderModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold">Quick Ordering System</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="row g-0">
+                    <div class="col-md-8 p-4 border-end">
+                        <label class="fw-bold mb-2 small text-muted">1. SELECT TABLE</label>
+                        <div class="d-flex gap-2 mb-4 overflow-auto pb-2" id="staffTablePicker">
+                            {% for t in tables %}
+                            <input type="radio" class="btn-check" name="staffTableRadio" id="t{{ t.number }}" value="{{ t.number }}" {% if forloop.first %}checked{% endif %}>
+                            <label class="btn btn-outline-primary fw-bold px-3" for="t{{ t.number }}">T{{ t.number }}</label>
+                            {% empty %}
+                            <p class="text-muted small">No tables configured.</p>
+                            {% endfor %}
+                        </div>
+
+                        <label class="fw-bold mb-2 small text-muted">2. SELECT CATEGORY</label>
+                        <div class="cat-tabs mb-3 d-flex gap-2 overflow-auto pb-1">
+                            <button class="cat-tab active" onclick="filterStaffItems('all', this)">All</button>
+                            {% for cat in categories %}
+                            <button class="cat-tab" onclick="filterStaffItems('{{ cat.name|escapejs }}', this)">{{ cat.name }}</button>
+                            {% endfor %}
+                        </div>
+
+                        <div class="row row-cols-2 row-cols-lg-3 g-3 mt-1" id="staffItemsGrid" style="max-height: 450px; overflow-y: auto; padding: 5px;">
+                            {% for item in menu_items %}
+                            <div class="col staff-menu-item" data-category="{{ item.category.name|default:'Uncategorized' }}">
+                                <div class="card h-100 border p-2 pointer-card shadow-sm" 
+                                     onclick='handleItemClick({
+                                        "id":"{{item.id}}",
+                                        "name":"{{item.name|escapejs}}",
+                                        "price":{{item.price}},
+                                        "variants": [{% for v in item.variants.all %}{"id":"{{v.id}}","size":"{{v.size_name|escapejs}}","price":{{v.price}}}{% if not forloop.last %},{% endif %}{% endfor %}]
+                                     })'>
+                                    <div class="d-flex justify-content-between align-items-start mb-1">
+                                        <div class="fw-bold small text-dark text-truncate">{{ item.name }}</div>
+                                        {% if item.variants.exists %}
+                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 0.6rem;">SIZES</span>
+                                        {% else %}
+                                        <i class="bi bi-plus-circle text-primary"></i>
+                                        {% endif %}
+                                    </div>
+                                    <div class="text-primary fw-bold">₹{{ item.price }}</div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="col-md-4 p-4 bg-light d-flex flex-column" style="background-color: #f9f9f9 !important;">
+                        <h6 class="fw-bold mb-3 border-bottom pb-2 text-dark"><i class="bi bi-cart3 me-2"></i>Order Summary</h6>
+                        <div id="staffCartList" class="mb-3 flex-grow-1" style="min-height: 350px; max-height: 450px; overflow-y: auto; padding-right: 5px;">
+                            <p class="text-center text-muted py-5 small" id="staffCartEmpty">No items selected</p>
+                        </div>
+                        <div class="border-top pt-3 mt-auto">
+                            <div class="d-flex justify-content-between h5 fw-bold mb-3">
+                                <span>Grand Total:</span>
+                                <span class="text-primary">₹<span id="staffCartTotal">0</span></span>
+                            </div>
+                            <button class="btn btn-success w-100 py-3 fw-bold shadow-sm" onclick="placeStaffOrder()">
+                                PLACE ORDER <i class="bi bi-send-fill ms-2"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="variantModal" tabindex="-1" style="z-index: 1070;">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white py-2">
+                <h6 class="modal-title fw-bold" id="variantItemName">Select Size</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-3" id="variantListContainer"></div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editOrderModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold">Edit Order #<span id="editingOrderLabel"></span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="editItemsList"></div>
+                <div class="alert alert-info py-2 small mt-3">
+                    <i class="bi bi-info-circle me-2"></i> Set quantity to <b>0</b> to remove an item.
+                </div>
+            </div>
+            <div class="modal-footer border-0 d-grid">
+                <button class="btn btn-danger py-3 fw-bold" onclick="saveEdits()">SAVE CHANGES & SYNC BILL</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let staffCart = [];
+let editingOrderId = null;
+let currentEditingItems = [];
+
+/**
+ * Robust JSON Rendering
+ */
+function renderAllKitchenOrders() {
+    document.querySelectorAll('.order-items-loader').forEach(container => {
+        try {
+            const rawJson = container.getAttribute('data-json');
+            if (!rawJson || rawJson === "None" || rawJson === "") return;
+
+            const data = JSON.parse(rawJson);
+            const items = Array.isArray(data) ? data : (data.items || []);
+            
+            container.innerHTML = '';
+            if (items.length === 0) {
+                container.innerHTML = '<li class="text-muted small px-2">No items</li>';
+                return;
+            }
+
+            items.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'list-group-item px-0 d-flex justify-content-between align-items-center border-0 py-1 bg-transparent';
+                const name = item.name || "Unknown";
+                const qty = item.qty || item.quantity || 1;
+                li.innerHTML = `
+                    <span class="fw-bold text-dark small">${name}</span> 
+                    <span class="badge rounded-pill bg-light text-primary border border-primary-subtle">x${qty}</span>
+                `;
+                container.appendChild(li);
+            });
+        } catch(e) { 
+            console.error("Card Item Render Fail:", e);
+            container.innerHTML = '<li class="text-danger small px-2">Data Error</li>';
+        }
+    });
+}
+document.addEventListener('DOMContentLoaded', renderAllKitchenOrders);
+
+/**
+ * Auto-refresh Live Feed (Every 30 seconds)
+ */
+setInterval(() => {
+    // Optionally trigger a silent fetch here if you don't want a full reload
+    // For now, simple visual feedback
+    const dot = document.querySelector('#refresh-status i');
+    dot.classList.toggle('text-success');
+    dot.classList.toggle('text-warning');
+}, 5000);
+
+/**
+ * FIXED STAFF ORDERING (Ownership Safe)
+ */
+function placeStaffOrder() {
+    if(staffCart.length === 0) { alert("Cart is empty!"); return; }
+    const selectedTable = document.querySelector('input[name="staffTableRadio"]:checked')?.value;
+    if(!selectedTable) { alert("Please select a table!"); return; }
+
+    fetch('/api/place-order/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json', 
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+            // REMOVED username: Backend derives owner from session for staff
+            table_num: selectedTable,
+            items: staffCart,
+            total: parseFloat(document.getElementById('staffCartTotal').innerText)
+        })
+    }).then(r => r.json()).then(d => { 
+        if(d.status === 'success') {
+            location.reload(); 
+        } else {
+            alert("Error placing order: " + (d.message || "Unknown error"));
+        }
+    });
+}
+
+function handleItemClick(item) {
+    if (item.variants && item.variants.length > 0) {
+        document.getElementById('variantItemName').innerText = item.name;
+        const container = document.getElementById('variantListContainer');
+        container.innerHTML = '';
+        
+        item.variants.forEach(v => {
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-outline-primary w-100 mb-2 fw-bold py-2 d-flex justify-content-between align-items-center';
+            btn.innerHTML = `<span>${v.size}</span> <span class="badge bg-primary text-white">₹${v.price}</span>`;
+            btn.onclick = () => {
+                addToStaffCart({
+                    "id": `${item.id}_v${v.id}`, 
+                    "name": `${item.name} (${v.size})`,
+                    "price": v.price
+                });
+                bootstrap.Modal.getInstance(document.getElementById('variantModal')).hide();
+            };
+            container.appendChild(btn);
+        });
+        new bootstrap.Modal(document.getElementById('variantModal')).show();
+    } else {
+        addToStaffCart(item);
+    }
+}
+
+function filterStaffItems(cat, btn) {
+    document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.staff-menu-item').forEach(item => {
+        item.style.display = (cat === 'all' || item.dataset.category === cat) ? 'block' : 'none';
+    });
+}
+
+function addToStaffCart(item) {
+    const existing = staffCart.find(i => i.id == item.id);
+    if(existing) { 
+        existing.qty++; 
+    } else { 
+        staffCart.push({...item, qty: 1}); 
+    }
+    renderStaffCart();
+}
+
+function renderStaffCart() {
+    const list = document.getElementById('staffCartList');
+    const totalEl = document.getElementById('staffCartTotal');
+    
+    if(staffCart.length === 0) {
+        list.innerHTML = '<p class="text-center text-muted py-5 small" id="staffCartEmpty">No items selected</p>';
+        totalEl.innerText = '0';
+        return;
+    }
+
+    list.innerHTML = staffCart.map((i, idx) => `
+        <div class="bg-white p-3 rounded border-start border-primary border-4 shadow-sm mb-2 d-flex justify-content-between align-items-center animate-item">
+            <div class="pe-2 overflow-hidden" style="flex: 1;">
+                <div class="fw-bold small text-dark text-truncate">${i.name}</div>
+                <div class="text-primary small fw-bold">₹${i.price}</div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-sm btn-light border px-2 shadow-sm" onclick="updateStaffQty(${idx}, -1)">-</button>
+                <span class="fw-bold">${i.qty}</span>
+                <button class="btn btn-sm btn-light border px-2 shadow-sm" onclick="updateStaffQty(${idx}, 1)">+</button>
+            </div>
+        </div>
+    `).join('');
+    
+    totalEl.innerText = staffCart.reduce((s, i) => s + (i.price * i.qty), 0);
+}
+
+function updateStaffQty(idx, delta) {
+    staffCart[idx].qty += delta;
+    if(staffCart[idx].qty <= 0) staffCart.splice(idx, 1);
+    renderStaffCart();
+}
+
+function updateStatus(orderId, newStatus) {
+    const formData = new FormData();
+    formData.append('status', newStatus);
+    fetch(`/api/update-order-status/${orderId}/`, {
+        method: 'POST',
+        body: formData,
+        headers: {'X-CSRFToken': '{{ csrf_token }}'}
+    }).then(res => res.json()).then(data => { if(data.status === 'success') location.reload(); });
+}
+
+function openEditModal(orderId) {
+    editingOrderId = orderId;
+    document.getElementById('editingOrderLabel').innerText = orderId;
+    fetch(`/api/get-order-details/${orderId}/`).then(r => r.json()).then(data => {
+        currentEditingItems = data.items || [];
+        renderEditList();
+        new bootstrap.Modal(document.getElementById('editOrderModal')).show();
+    });
+}
+
+function renderEditList() {
+    const cont = document.getElementById('editItemsList');
+    cont.innerHTML = currentEditingItems.map((item, idx) => `
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="small fw-bold">${item.name}</span>
+            <div class="d-flex align-items-center gap-3">
+                <button class="btn btn-sm btn-outline-danger" onclick="changeEditQty(${idx}, -1)">-</button>
+                <span class="fw-bold fs-5">${item.qty}</span>
+                <button class="btn btn-sm btn-outline-primary" onclick="changeEditQty(${idx}, 1)">+</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function changeEditQty(idx, delta) {
+    currentEditingItems[idx].qty += delta;
+    if(currentEditingItems[idx].qty < 0) currentEditingItems[idx].qty = 0;
+    renderEditList();
+}
+
+function saveEdits() {
+    const cleanItems = currentEditingItems.filter(i => i.qty > 0);
+    const newTotal = cleanItems.reduce((s, i) => s + (i.price * i.qty), 0);
+    fetch(`/api/edit-order/${editingOrderId}/`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+        body: JSON.stringify({ items_payload: { items: cleanItems }, total_price: newTotal })
+    }).then(r => r.json()).then(d => { if(d.status === 'success') location.reload(); });
+}
+</script>
+
+<style>
+    .cat-tab { padding: .4rem 1.2rem; border-radius: 999px; border: 2px solid #e2e8f0; background: white; font-size: .85rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .cat-tab.active { background: #1e40af; color: white; border-color: #1e40af; }
+    .pointer-card { cursor: pointer; transition: all 0.2s; border-radius: 10px; }
+    .pointer-card:hover { transform: translateY(-2px); border-color: #1e40af !important; }
+    .pointer-card:active { transform: scale(0.95); background: #f0f7ff; }
+    .btn-check:checked + .btn-outline-primary { background-color: #1e40af !important; color: white !important; }
+    .animate-item { animation: slideIn 0.3s ease-out; }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: translateX(0); } }
+</style>
+{% endblock %}

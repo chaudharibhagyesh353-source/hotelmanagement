@@ -1,0 +1,60 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}Order History{% endblock %}
+
+{% block content %}
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1>📜 Sales & Order History</h1>
+        <p>Permanently stored records of all customers and sales</p>
+    </div>
+    <form method="GET" class="d-flex gap-2">
+        <input type="date" name="date" class="form-control" value="{{ selected_date }}">
+        <button type="submit" class="btn btn-primary">Filter</button>
+        <a href="{% url 'order_history' %}" class="btn btn-outline-secondary">Clear</a>
+    </form>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light">
+                    <tr>
+                        <th class="ps-4">Date & Time</th>
+                        <th>Order ID</th>
+                        <th>Table</th>
+                        <th>Customer Phone</th>
+                        <th>Items Ordered</th>
+                        <th class="text-end pe-4">Total Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in history_data %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="fw-bold">{{ item.order.created_at|date:"d M, Y" }}</div>
+                            <div class="small text-muted">{{ item.order.created_at|time:"H:i" }}</div>
+                        </td>
+                        <td><span class="badge bg-secondary">#{{ item.order.id }}</span></td>
+                        <td><span class="badge bg-dark rounded-pill">Table {{ item.order.table.number }}</span></td>
+                        <td class="fw-bold text-primary">{{ item.phone }}</td>
+                        <td>
+                            <div class="small">
+                                {% for menu_item in item.items %}
+                                    {{ menu_item.qty }}x {{ menu_item.name }}{% if not forloop.last %}, {% endif %}
+                                {% endfor %}
+                            </div>
+                        </td>
+                        <td class="text-end pe-4 fw-bold text-success fs-5">₹{{ item.order.total_price }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">No history found for this selection.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

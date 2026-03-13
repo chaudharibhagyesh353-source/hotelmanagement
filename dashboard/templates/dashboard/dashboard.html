@@ -1,0 +1,234 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}Dashboard Overview{% endblock %}
+{% block page_title %}Dashboard Overview{% endblock %}
+
+{% block content %}
+<div class="section-header">
+    <h1>🍽️ Good Evening, Admin!</h1>
+    <p>Live status of your restaurant's orders and tables</p>
+</div>
+
+<div class="row row-cols-1 row-cols-md-2 row-cols-xl-4 g-4 mb-4">
+    <div class="col">
+        <div class="card metric-card border-left-green h-100 shadow-sm">
+            <div class="card-body d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="metric-label">Today's Total Sales</div>
+                    <div class="metric-value text-success">₹<span id="total-sales-val">{{ total_sales|floatformat:2 }}</span></div>
+                    <div class="metric-change text-success small"><i class="bi bi-graph-up"></i> Live calculation</div>
+                </div>
+                <div class="metric-icon bg-success bg-opacity-10">
+                    <i class="bi bi-currency-rupee fs-4 text-success"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card metric-card border-left-blue h-100 shadow-sm">
+            <div class="card-body d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="metric-label">Active Tables</div>
+                    <div class="metric-value text-primary"><span id="active-tables-count">{{ active_tables }}</span> / {{ total_tables }}</div>
+                    <div class="metric-change text-muted small">Live Occupancy</div>
+                </div>
+                <div class="metric-icon bg-primary bg-opacity-10">
+                    <i class="bi bi-grid-3x3-gap-fill fs-4 text-primary"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card metric-card border-left-orange h-100 shadow-sm">
+            <div class="card-body d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="metric-label">Pending Orders</div>
+                    <div class="metric-value text-warning" id="pending-orders-count">{{ pending_orders }}</div>
+                    <div class="metric-change text-muted small">Waiting for kitchen</div>
+                </div>
+                <div class="metric-icon bg-warning bg-opacity-10">
+                    <i class="bi bi-clock-history fs-4 text-warning"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card metric-card border-left-red h-100 shadow-sm">
+            <div class="card-body d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="metric-label">Staff on Duty</div>
+                    <div class="metric-value text-danger">{{ active_staff_count|default:"0" }}</div>
+                    <div class="metric-change text-muted small">Active Personnel</div>
+                </div>
+                <div class="metric-icon bg-danger bg-opacity-10">
+                    <i class="bi bi-people-fill fs-4 text-danger"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-8">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body">
+                <h5 class="fw-bold mb-1">Weekly Sales Performance</h5>
+                <canvas id="salesChart" height="120"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body">
+                <h5 class="fw-bold mb-1">Quick Alerts</h5>
+                <div class="mt-3">
+                    {% for action in urgent_actions %}
+                    <div class="p-3 mb-2 rounded bg-light border-start border-4 {% if action.priority == 'high' %}border-danger{% else %}border-warning{% endif %}">
+                        <h6 class="fw-bold mb-1 small">{{ action.title }}</h6>
+                        <p class="text-muted mb-1 x-small">{{ action.description }}</p>
+                        <a href="#" class="btn btn-sm btn-link p-0 text-decoration-none fw-bold">Fix Now →</a>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted small">No urgent tasks</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h5 class="fw-bold mb-1 text-primary">Live Order Status Tracker</h5>
+                <p class="text-muted small mb-0">Workflow: Placed ➔ Cooking ➔ Ready ➔ Served</p>
+            </div>
+            <span class="badge bg-primary-subtle text-primary rounded-pill px-3 py-2">Real-time Update</span>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="bg-light">
+                    <tr class="text-muted small text-uppercase">
+                        <th>Order ID</th>
+                        <th>Table</th>
+                        <th>Time</th>
+                        <th>Status Workflow</th>
+                        <th class="text-end">Amount</th>
+                        <th class="text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="live-order-tracker">
+                    {% for order in recent_activity_objects %}
+                    <tr id="order-row-{{ order.id }}">
+                        <td><strong>#{{ order.id }}</strong></td>
+                        <td><span class="badge bg-dark rounded-pill">Table {{ order.table.number }}</span></td>
+                        <td class="small text-muted">{{ order.created_at|time:"H:i" }}</td>
+                        <td>
+                            <div class="d-flex align-items-center gap-1">
+                                <span class="badge {% if order.status == 'pending' %}bg-primary{% else %}bg-secondary opacity-25{% endif %}">Placed</span>
+                                <i class="bi bi-chevron-right text-muted small"></i>
+                                <span class="badge {% if order.status == 'preparing' %}bg-warning text-dark{% else %}bg-secondary opacity-25{% endif %}">Cooking</span>
+                                <i class="bi bi-chevron-right text-muted small"></i>
+                                <span class="badge {% if order.status == 'cooked' %}bg-info text-white{% else %}bg-secondary opacity-25{% endif %}">Ready</span>
+                                <i class="bi bi-chevron-right text-muted small"></i>
+                                <span class="badge {% if order.status == 'served' %}bg-success{% else %}bg-secondary opacity-25{% endif %}">Served</span>
+                            </div>
+                        </td>
+                        <td class="text-end fw-bold text-primary">₹{{ order.total_price }}</td>
+                        <td class="text-center">
+                            {% if order.status == 'cooked' %}
+                            <button class="btn btn-sm btn-success shadow-sm px-3 fw-bold" onclick="updateOrderStatus('{{ order.id }}', 'served')">
+                                <i class="bi bi-check2-all me-1"></i> SERVE
+                            </button>
+                            {% elif order.status == 'served' %}
+                            <span class="text-success small fw-bold"><i class="bi bi-check-circle-fill"></i> Done</span>
+                            {% else %}
+                            <span class="text-muted x-small italic">In Kitchen...</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">No live orders at the moment.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Sales Chart Initialization
+    const salesCtx = document.getElementById('salesChart').getContext('2d');
+    new Chart(salesCtx, {
+        type: 'line',
+        data: {
+            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            datasets: [{
+                label: 'Daily Sales (₹)',
+                data: [45000, 52000, 48000, 61000, 73000, 85000, 78000],
+                borderColor: '#2563eb',
+                backgroundColor: 'rgba(37,99,235,0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+
+    function updateDashboard() {
+        fetch('/api/latest-orders/')
+        .then(res => res.json())
+        .then(data => {
+            // Update Metric Counts
+            document.getElementById('total-sales-val').innerText = data.total_sales;
+            document.getElementById('pending-orders-count').innerText = data.total_pending;
+
+            // Naye orders ko Table mein upar add karein (Live Tracker)
+            if (data.new_activities && data.new_activities.length > 0) {
+                const tracker = document.getElementById('live-order-tracker');
+                data.new_activities.forEach(act => {
+                    const row = `
+                        <tr class="table-primary animated fadeInDown">
+                            <td><strong>#New</strong></td>
+                            <td><span class="badge bg-dark">Table ${act.table}</span></td>
+                            <td class="small text-muted">Just Now</td>
+                            <td>
+                                <div class="d-flex gap-1">
+                                    <span class="badge bg-primary">Placed</span>
+                                    <span class="badge bg-secondary opacity-25">Cooking</span>
+                                    <span class="badge bg-secondary opacity-25">Ready</span>
+                                    <span class="badge bg-secondary opacity-25">Served</span>
+                                </div>
+                            </td>
+                            <td class="text-end fw-bold text-primary">₹${act.amount}</td>
+                        </tr>
+                    `;
+                    tracker.insertAdjacentHTML('afterbegin', row);
+                });
+            }
+        });
+    }
+
+    // Har 10 second mein auto-refresh
+    setInterval(updateDashboard, 10000);
+</script>
+
+<style>
+    .x-small { font-size: 0.75rem; }
+    .animated { animation-duration: 0.8s; }
+    @keyframes fadeInDown {
+        from { opacity: 0; transform: translate3d(0, -20px, 0); }
+        to { opacity: 1; transform: translate3d(0, 0, 0); }
+    }
+    .fadeInDown { animation-name: fadeInDown; }
+</style>
+{% endblock %}

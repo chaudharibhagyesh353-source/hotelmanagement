@@ -1,0 +1,386 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}Menu Manager{% endblock %}
+{% block page_title %}Menu Manager{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between section-header mb-4">
+    <div>
+        <h1 class="fw-bold">Menu Manager</h1>
+        <p class="text-muted">Manage your restaurant menu items and custom categories</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#manageCategoryModal">
+            <i class="bi bi-tag me-2"></i>Manage Categories
+        </button>
+        <button class="btn btn-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#addItemModal">
+            <i class="bi bi-plus-lg me-2"></i>Add New Item
+        </button>
+    </div>
+</div>
+
+<div class="row row-cols-2 row-cols-md-5 g-3 mb-4">
+    {% for cat in category_stats %}
+    <div class="col">
+        <div class="card text-center h-100 shadow-sm border-0 position-relative category-card bg-white">
+            <div class="card-body py-3">
+                <div class="fw-bold fs-2 text-primary">{{ cat.total }}</div>
+                <div class="fw-semibold small">{{ cat.name }}</div>
+                <div class="category-actions mt-2">
+                    <button class="btn btn-link btn-sm p-0 me-2" onclick="openEditCategoryModal('{{ cat.id }}', '{{ cat.name|escapejs }}')">
+                        <i class="bi bi-pencil small"></i>
+                    </button>
+                    <form method="post" class="d-inline" onsubmit="return confirm('Delete category? All items in it will be lost!');">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="delete_category">
+                        <input type="hidden" name="cat_id" value="{{ cat.id }}">
+                        <button type="submit" class="btn btn-link btn-sm p-0 text-danger">
+                            <i class="bi bi-trash small"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h5 class="fw-bold mb-0">Menu Items</h5>
+            <div class="d-flex gap-2 align-items-center">
+                <span class="text-muted small">Filter:</span>
+                <input type="text" id="menuSearch" class="form-control form-control-sm" placeholder="Search items..."
+                    style="width:200px;" onkeyup="filterMenu()">
+            </div>
+        </div>
+
+        <div class="cat-tabs mb-3" id="catTabs">
+            <button class="cat-tab active" onclick="filterCat(this, 'all')">All</button>
+            {% for cat in categories %}
+            <button class="cat-tab" onclick="filterCat(this, '{{ cat.name }}')">{{ cat.name }}</button>
+            {% endfor %}
+        </div>
+
+        <div id="menuList" class="d-flex flex-column gap-3">
+            {% for item in menu_items %}
+            <div class="menu-item-group border rounded-3 p-1 hover-bg-light" data-category="{{ item.category.name }}" data-name="{{ item.name|lower }}">
+                <div class="menu-list-item d-flex align-items-center gap-3 p-3 border-0">
+                    
+                    <div class="rounded-3 overflow-hidden d-flex align-items-center justify-content-center flex-shrink-0 bg-light"
+                        style="width:70px;height:70px; border: 1px solid #eee;">
+                        {% if item.image %}
+                            <img src="{{ item.image.url }}" class="w-100 h-100 object-fit-cover shadow-sm">
+                        {% else %}
+                            <i class="bi bi-image text-muted fs-4"></i>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="flex-grow-1">
+                        <div class="fw-bold text-dark fs-5">{{ item.name }}</div>
+                        <div class="text-muted small mb-1">{{ item.category.name }}</div>
+                        {% if item.description %}
+                            <div class="text-muted extra-small text-truncate" style="max-width: 300px;">{{ item.description }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="text-end me-3">
+                        <div class="fw-bold text-primary fs-5">₹{{ item.price }}</div>
+                        <span class="badge bg-light text-dark border small fw-normal">Base Price</span>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-success" onclick="openAddVariantModal('{{ item.id }}', '{{ item.name|escapejs }}')">
+                            <i class="bi bi-plus-circle"></i> Size
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary" 
+                                onclick="openEditModal('{{ item.id }}', '{{ item.name|escapejs }}', '{{ item.category.id }}', '{{ item.price }}', '{{ item.description|escapejs }}')">
+                            <i class="bi bi-pencil-square"></i>
+                        </button>
+                        <form method="post" onsubmit="return confirm('Delete &quot;{{ item.name }}&quot;?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete_item">
+                            <input type="hidden" name="item_id" value="{{ item.id }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash3"></i></button>
+                        </form>
+                    </div>
+                </div>
+
+                {% if item.variants.all %}
+                <div class="ms-5 me-3 mb-3 p-3 bg-light rounded-3 border-start border-primary border-4">
+                    <h6 class="fw-bold small text-uppercase text-muted mb-2">Sizes / Variants</h6>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for variant in item.variants.all %}
+                        <div class="variant-badge bg-white border rounded-pill px-3 py-1 d-flex align-items-center gap-2 shadow-sm">
+                            <span class="fw-semibold small">{{ variant.size_name }}</span>
+                            <span class="text-primary fw-bold">₹{{ variant.price }}</span>
+                            <div class="variant-controls ms-2 border-start ps-2">
+                                <button class="btn btn-link btn-sm p-0 text-primary me-1" onclick="openEditVariantModal('{{ variant.id }}', '{{ variant.size_name|escapejs }}', '{{ variant.price }}')">
+                                    <i class="bi bi-pencil small"></i>
+                                </button>
+                                <form method="post" class="d-inline" onsubmit="return confirm('Remove this size?');">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="delete_variant">
+                                    <input type="hidden" name="variant_id" value="{{ variant.id }}">
+                                    <button type="submit" class="btn btn-link btn-sm p-0 text-danger"><i class="bi bi-x-circle small"></i></button>
+                                </form>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% empty %}
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-journal-x fs-1 d-block mb-2 opacity-40"></i>
+                <p>No menu items found. Start by adding a category!</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm bg-light">
+    <div class="card-body">
+        <h5 class="fw-bold mb-3"><i class="bi bi-lightning-charge me-2 text-primary"></i>Quick Add Item</h5>
+        <form method="post" class="row g-3 align-items-end" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_item">
+            <div class="col-md-3">
+                <label class="form-label fw-semibold small text-muted">Item Name</label>
+                <input type="text" name="name" class="form-control border-0 shadow-sm" placeholder="e.g. Paneer Tikka" required>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold small text-muted">Category</label>
+                <select name="category_id" class="form-select border-0 shadow-sm">
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}">{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold small text-muted">Price (₹)</label>
+                <input type="number" name="price" class="form-control border-0 shadow-sm" placeholder="250" min="1" required>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold small text-muted">Description</label>
+                <input type="text" name="description" class="form-control border-0 shadow-sm" placeholder="Spicy paneer cubes...">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100 shadow-sm">Add Item</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade" id="addItemModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold">Add New Menu Item</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_item">
+                <div class="modal-body row g-3">
+                    <div class="col-12"><label class="form-label fw-bold small">Item Name</label><input type="text" name="name" class="form-control" required></div>
+                    <div class="col-12"><label class="form-label fw-bold small">Category</label>
+                        <select name="category_id" class="form-select">
+                            {% for cat in categories %} <option value="{{ cat.id }}">{{ cat.name }}</option> {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12"><label class="form-label fw-bold small">Base Price (₹)</label><input type="number" name="price" class="form-control" required></div>
+                    <div class="col-12"><label class="form-label fw-bold small">Dish Image</label><input type="file" name="image" class="form-control" accept="image/*"></div>
+                    <div class="col-12"><label class="form-label fw-bold small">Description</label><textarea name="description" class="form-control" rows="3" placeholder="Tell customers about the ingredients..."></textarea></div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">Save Item</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editItemModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold">Edit Item Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="edit_item">
+                <input type="hidden" name="item_id" id="edit_item_id">
+                <div class="modal-body row g-3">
+                    <div class="col-12"><label class="form-label fw-bold small">Item Name</label><input type="text" name="name" id="edit_name" class="form-control" required></div>
+                    <div class="col-12"><label class="form-label fw-bold small">Category</label>
+                        <select name="category_id" id="edit_category_id" class="form-select">
+                            {% for cat in categories %} <option value="{{ cat.id }}">{{ cat.name }}</option> {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12"><label class="form-label fw-bold small">Price (₹)</label><input type="number" name="price" id="edit_price" class="form-control" required></div>
+                    <div class="col-12"><label class="form-label fw-bold small">Change Image (Optional)</label><input type="file" name="image" class="form-control" accept="image/*"></div>
+                    <div class="col-12"><label class="form-label fw-bold small">Description</label><textarea name="description" id="edit_description" class="form-control" rows="3"></textarea></div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="submit" class="btn btn-dark w-100 py-2 fw-bold">Update Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="manageCategoryModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold">Create New Category</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_category">
+                <div class="modal-body">
+                    <label class="form-label fw-bold small">Category Name</label>
+                    <input type="text" name="cat_name" class="form-control" placeholder="e.g. Starters, Main Course" required>
+                </div>
+                <div class="modal-footer border-0"><button type="submit" class="btn btn-primary px-4">Create Category</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editCategoryModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold">Edit Category</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="edit_category">
+                <input type="hidden" name="cat_id" id="edit_cat_id">
+                <div class="modal-body">
+                    <label class="form-label fw-bold small">Category Name</label>
+                    <input type="text" name="cat_name" id="edit_cat_name" class="form-control" required>
+                </div>
+                <div class="modal-footer border-0"><button type="submit" class="btn btn-dark px-4">Save Changes</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="addVariantModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title fw-bold">Add Size/Variant</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_variant">
+                <input type="hidden" name="item_id" id="variant_item_id">
+                <div class="modal-body">
+                    <p class="small text-muted mb-3">Adding size for: <b id="variant_item_name"></b></p>
+                    <div class="mb-3"><label class="form-label fw-bold small">Size Name</label><input type="text" name="size_name" class="form-control" placeholder="e.g. Medium, Half" required></div>
+                    <div class="mb-3"><label class="form-label fw-bold small">Price (₹)</label><input type="number" name="price" class="form-control" required></div>
+                </div>
+                <div class="modal-footer border-0"><button type="submit" class="btn btn-success px-4">Add Variant</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editVariantModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-dark text-white border-0">
+                <h5 class="modal-title fw-bold">Edit Variant</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="edit_variant">
+                <input type="hidden" name="variant_id" id="edit_variant_id">
+                <div class="modal-body">
+                    <div class="mb-3"><label class="form-label fw-bold small">Size Name</label><input type="text" name="size_name" id="edit_v_name" class="form-control" required></div>
+                    <div class="mb-3"><label class="form-label fw-bold small">Price (₹)</label><input type="number" name="price" id="edit_v_price" class="form-control" required></div>
+                </div>
+                <div class="modal-footer border-0"><button type="submit" class="btn btn-dark px-4">Update Variant</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentCat = 'all';
+
+    function filterMenu() {
+        const q = document.getElementById('menuSearch').value.toLowerCase();
+        document.querySelectorAll('.menu-item-group').forEach(el => {
+            const name = el.dataset.name;
+            const cat = el.dataset.category;
+            const catMatch = currentCat === 'all' || cat === currentCat;
+            const nameMatch = name.includes(q);
+            el.style.display = (catMatch && nameMatch) ? '' : 'none';
+        });
+    }
+
+    function filterCat(btn, cat) {
+        currentCat = cat;
+        document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        filterMenu();
+    }
+
+    function openAddVariantModal(itemId, itemName) {
+        document.getElementById('variant_item_id').value = itemId;
+        document.getElementById('variant_item_name').innerText = itemName;
+        new bootstrap.Modal(document.getElementById('addVariantModal')).show();
+    }
+
+    function openEditVariantModal(variantId, sizeName, price) {
+        document.getElementById('edit_variant_id').value = variantId;
+        document.getElementById('edit_v_name').value = sizeName;
+        document.getElementById('edit_v_price').value = price;
+        new bootstrap.Modal(document.getElementById('editVariantModal')).show();
+    }
+
+    // UPDATED: Now populates description field
+    function openEditModal(id, name, catId, price, description) {
+        document.getElementById('edit_item_id').value = id;
+        document.getElementById('edit_name').value = name;
+        document.getElementById('edit_category_id').value = catId;
+        document.getElementById('edit_price').value = price;
+        document.getElementById('edit_description').value = description; // New line
+        new bootstrap.Modal(document.getElementById('editItemModal')).show();
+    }
+
+    function openEditCategoryModal(id, name) {
+        document.getElementById('edit_cat_id').value = id;
+        document.getElementById('edit_cat_name').value = name;
+        new bootstrap.Modal(document.getElementById('editCategoryModal')).show();
+    }
+</script>
+
+<style>
+    .category-card .category-actions { opacity: 0; transition: opacity 0.3s; }
+    .category-card:hover .category-actions { opacity: 1; }
+    .cat-tab.active { background-color: #0d6efd; color: white; border-color: #0d6efd; }
+    .cat-tabs { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.5rem; }
+    .cat-tab { border: 1px solid #dee2e6; background: white; padding: 0.4rem 1.2rem; border-radius: 50px; font-size: 0.85rem; white-space: nowrap; cursor: pointer; }
+    .menu-item-group { transition: 0.2s; background: white; }
+    .hover-bg-light:hover { background-color: #fbfcfe; }
+    .variant-badge { font-size: 0.85rem; }
+    .extra-small { font-size: 0.75rem; color: #888; }
+    .object-fit-cover { object-fit: cover; }
+</style>
+{% endblock %}
