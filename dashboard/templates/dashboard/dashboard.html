@@ -122,7 +122,7 @@
                     {% for order in recent_activity_objects %}
                     <tr id="order-row-{{ order.id }}">
                         <td><strong>#{{ order.id }}</strong></td>
-                        <td><span class="badge bg-dark rounded-pill">Table {{ order.table.number }}</span></td>
+                        <td><span class="badge bg-dark rounded-pill">Table {{ order.table.name }}</span></td>
                         <td class="small text-muted">{{ order.created_at|time:"H:i" }}</td>
                         <td>
                             <div class="d-flex align-items-center gap-1">
