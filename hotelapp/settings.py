@@ -12,7 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-a#v2bu#7^dmdm&)h=9*%q+j*v7v_&!()*sty=f(n=05=g%opmh')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# Agar Render par ho toh DEBUG False hoga, local par True.
+# RENDER par DEBUG ko environment variable se control karenge
 DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true' if 'RENDER' in os.environ else True
 
 # ALLOWED_HOSTS configuration for Render and Local
@@ -122,8 +122,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Login/Logout redirects
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-LOGIN_REDIRECT_URL = 'dashboard'
-LOGOUT_REDIRECT_URL = 'login'
+LOGIN_URL = 'login'              # NEW: Redirects unauthorized users to your custom login page
+LOGIN_REDIRECT_URL = 'dashboard' # Where to go after successful login
+LOGOUT_REDIRECT_URL = 'login'    # Where to go after logging out
 
 # hotelapp/settings.py
 LOGOUT_ON_GET = True
