@@ -1,0 +1,1 @@
+Cloudinary Connection Test for Bhagyesh's Hotel App

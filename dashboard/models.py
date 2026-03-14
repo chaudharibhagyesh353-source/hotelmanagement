@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
+# NEW: Cloudinary field for permanent image storage
+from cloudinary.models import CloudinaryField
 
 # ─── 0. RESTAURANT PROFILE (For Settings Page) ───
 class RestaurantProfile(models.Model):
@@ -71,7 +73,9 @@ class MenuItem(models.Model):
     price = models.DecimalField(max_digits=8, decimal_places=2)
     has_variants = models.BooleanField(default=False)
     
-    image = models.ImageField(upload_to='menu_items/', null=True, blank=True) 
+    # UPDATED: Cleaned for global settings management to fix 'NotAllowed' error.
+    # MacBook compatibility ke liye preset logic ab settings.py se handle hogi.
+    image = CloudinaryField('image', folder='menu_items/',upload_preset='hotel_menu_preset', null=True, blank=True)
     description = models.TextField(null=True, blank=True) 
 
     class Meta:

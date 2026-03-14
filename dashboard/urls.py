@@ -52,6 +52,12 @@ urlpatterns = [
 
     # Bill Settlement & Table Reset Logic
     path('api/settle-bill/', views.settle_bill_api, name='settle_bill_api'),
+
+    # ─── 5. NEW: MOBILE APP (FLUTTER) APIs ───
+    # In endpoints ko aapka Flutter app hit karega data lene ke liye
+    path('api/v1/menu-items/', views.get_menu_api, name='api_menu_items'),
+    path('api/v1/tables-status/', views.get_tables_api, name='api_tables_status'),
+    path('api/v1/restaurant-profile/', views.get_profile_api, name='api_profile'),
 ]
 
 # Serving Media Files (Images for Menu Items)

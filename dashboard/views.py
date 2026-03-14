@@ -1,4 +1,5 @@
 import json
+import cloudinary.uploader
 from decimal import Decimal
 from functools import wraps
 from django.contrib.auth.decorators import login_required
@@ -11,7 +12,15 @@ from django.db.models import Sum
 from django.utils import timezone
 from django.contrib.auth.models import User 
 from django.contrib.auth import update_session_auth_hash 
+
+# Internal Imports
 from .models import Table, MenuItem, StaffMember, Order, Category, MenuItemVariant, RestaurantProfile
+
+# ─── NEW: FLUTTER API IMPORTS ───
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from .serializers import MenuItemSerializer, TableSerializer, RestaurantProfileSerializer
 
 # ─── HELPER: GET DATA OWNER (SaaS Logic) ───
 def get_data_owner(request):
@@ -112,42 +121,70 @@ def menu_manager(request):
         
         if action == 'add_category':
             name = request.POST.get('cat_name')
-            if name: Category.objects.get_or_create(user=request.user, name=name)
+            if name:
+                Category.objects.get_or_create(user=request.user, name=name)
         
         elif action == 'edit_category':
             cat = get_object_or_404(Category, id=request.POST.get('cat_id'), user=request.user)
-            cat.name = request.POST.get('cat_name'); cat.save()
+            cat.name = request.POST.get('cat_name')
+            cat.save()
         
         elif action == 'delete_category':
             Category.objects.filter(id=request.POST.get('cat_id'), user=request.user).delete()
         
         elif action == 'add_item':
             cat = get_object_or_404(Category, id=request.POST.get('category_id'), user=request.user)
+
+            image_file = request.FILES.get('image')
+            uploaded_image = None
+
+            if image_file:
+                uploaded_image = cloudinary.uploader.upload(
+                    image_file,
+                    upload_preset="bhagyesh_final_test",
+                    resource_type="image"
+                )
+
             MenuItem.objects.create(
-                user=request.user, 
-                name=request.POST.get('name'), 
-                category=cat, 
+                user=request.user,
+                name=request.POST.get('name'),
+                category=cat,
                 price=float(request.POST.get('price', 0)),
                 description=request.POST.get('description'),
-                image=request.FILES.get('image')
+                image=uploaded_image['public_id'] if uploaded_image else None
             )
         
         elif action == 'edit_item':
             item_id = request.POST.get('item_id')
             item = get_object_or_404(MenuItem, id=item_id, user=request.user)
+
             item.name = request.POST.get('name')
             item.price = float(request.POST.get('price', 0))
             item.description = request.POST.get('description')
-            if request.FILES.get('image'):
-                item.image = request.FILES.get('image')
+
+            image_file = request.FILES.get('image')
+            if image_file:
+                uploaded_image = cloudinary.uploader.upload(
+                    image_file,
+                    upload_preset="bhagyesh_final_test"
+                )
+                item.image = uploaded_image['public_id']
+
             item.save()
         
         elif action == 'add_variant':
             item = get_object_or_404(MenuItem, id=request.POST.get('item_id'), user=request.user)
-            MenuItemVariant.objects.create(item=item, size_name=request.POST.get('size_name'), price=float(request.POST.get('price', 0)))
+            MenuItemVariant.objects.create(
+                item=item,
+                size_name=request.POST.get('size_name'),
+                price=float(request.POST.get('price', 0))
+            )
         
         elif action == 'delete_variant':
-            MenuItemVariant.objects.filter(id=request.POST.get('variant_id'), item__user=request.user).delete()
+            MenuItemVariant.objects.filter(
+                id=request.POST.get('variant_id'),
+                item__user=request.user
+            ).delete()
 
         return redirect('menu_manager')
 
@@ -156,8 +193,8 @@ def menu_manager(request):
         'categories': Category.objects.filter(user=request.user),
         'active_page': 'menu',
     }
-    return render(request, 'dashboard/menu_manager.html', context)
 
+    return render(request, 'dashboard/menu_manager.html', context)
 # 5. Settings View
 @login_required
 @owner_only
@@ -221,9 +258,8 @@ def floor_plan(request):
     if request.method == 'POST':
         action = request.POST.get('action')
         if action == 'add_table':
-            name = request.POST.get('name') # 'number' ki jagah 'name'
+            name = request.POST.get('name') 
             domain = request.get_host()
-            # Link generation ab name use karega
             link = f"http://{domain}/order/{request.user.username}/{name}/"
             if name: 
                 Table.objects.get_or_create(
@@ -244,7 +280,6 @@ def place_order_api(request):
         try:
             data = json.loads(request.body)
             owner = get_data_owner(request) if request.user.is_authenticated else User.objects.get(username=data['username'])
-            # 'number' field ko 'name' se badla gaya
             table = Table.objects.get(user=owner, name=data['table_num']) 
             payload = {'items': data['items'], 'customer_phone': data.get('phone_number', 'Staff Order')}
             Order.objects.create(user=owner, table=table, items_json=json.dumps(payload), total_price=Decimal(str(data['total'])))
@@ -278,7 +313,6 @@ def billing_pos(request):
 def settle_bill_api(request):
     if request.method == 'POST':
         data = json.loads(request.body)
-        # number ki jagah name
         table = get_object_or_404(Table, user=request.user, name=data.get('table_num'))
         Order.objects.filter(user=request.user, table=table).exclude(status='served').update(status='served')
         table.status, table.current_amount, table.items_count = 'available', Decimal('0.00'), 0
@@ -318,7 +352,6 @@ def edit_order_api(request, order_id):
         return JsonResponse({'status': 'success'})
     return JsonResponse({'status': 'error'}, status=400)
 
-# UPDATED: table_num rename to table_name for clarity
 def customer_menu(request, username, table_name):
     owner = get_object_or_404(User, username=username)
     table = get_object_or_404(Table, user=owner, name=table_name)
@@ -338,7 +371,6 @@ def order_history(request):
         history_list.append({'order': o, 'phone': data.get('customer_phone', 'N/A'), 'items': data.get('items', [])})
     return render(request, 'dashboard/history.html', {'history_data': history_list, 'active_page': 'history'})
 
-# UPDATED: Activity logging uses name
 @login_required
 def latest_orders_api(request):
     today = timezone.now().date()
@@ -354,3 +386,33 @@ def latest_orders_api(request):
         order.is_notified = True; order.save()
     total_sales = Order.objects.filter(user=request.user, status='served', created_at__date=today).aggregate(Sum('total_price'))['total_price__sum'] or 0
     return JsonResponse({'total_pending': Order.objects.filter(user=request.user, status='pending').count(), 'total_sales': float(total_sales), 'new_activities': new_activities})
+
+
+# ─── 11. NEW: FLUTTER MOBILE APP APIs ───
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_menu_api(request):
+    """Flutter app ke liye full menu list with Cloudinary URLs."""
+    owner = get_data_owner(request)
+    items = MenuItem.objects.filter(user=owner).prefetch_related('variants')
+    serializer = MenuItemSerializer(items, many=True)
+    return Response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_tables_api(request):
+    """Flutter app ke liye table list aur status (Occupied/Available)."""
+    owner = get_data_owner(request)
+    tables = Table.objects.filter(user=owner)
+    serializer = TableSerializer(tables, many=True)
+    return Response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_profile_api(request):
+    """Restaurant settings (GST, Name, Currency) Flutter app ke liye."""
+    owner = get_data_owner(request)
+    profile, created = RestaurantProfile.objects.get_or_create(user=owner)
+    serializer = RestaurantProfileSerializer(profile)
+    return Response(serializer.data)
