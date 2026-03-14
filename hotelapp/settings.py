@@ -122,22 +122,37 @@ USE_I18N = True
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
+# --- STATIC & MEDIA FILES CONFIGURATION (UPDATED FOR DJANGO 5.2) ---
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-if not DEBUG:
-    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# Django 5.x naya rasta (STORAGES dictionary)
+STORAGES = {
+    "default": {
+        "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
+# Backward compatibility (Render build fix ke liye)
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 
-# --- UPDATED: ROBUST CLOUDINARY CONFIGURATION (Hardcoded for Debugging) ---
+# --- UPDATED: ROBUST CLOUDINARY CONFIGURATION ---
 
-# SDK configuration for manual uploads and permission bypass
+# SDK configuration for manual uploads
 cloudinary.config(
-    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
-    api_key=os.getenv("CLOUDINARY_API_KEY"),
-    api_secret=os.getenv("CLOUDINARY_API_SECRET")
+    cloud_name = 'dsf6jykmx',
+    api_key = '942971569282224',
+    api_secret = 'rsRxF5AMCCpO0nAgRyHVHmtVaMI',
+    secure = True
 )
 
 # Django-Cloudinary-Storage configuration
@@ -147,10 +162,6 @@ CLOUDINARY_STORAGE = {
     'API_SECRET': 'rsRxF5AMCCpO0nAgRyHVHmtVaMI',
     'UPLOAD_PRESET': 'bhagyesh_final_test'
 }
-
-DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 
 # Default primary key field type
