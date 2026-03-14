@@ -122,28 +122,30 @@ USE_I18N = True
 USE_TZ = True
 
 
-# --- STATIC & MEDIA FILES CONFIGURATION (UPDATED FOR DJANGO 5.2 & RENDER FIX) ---
+# --- STATIC & MEDIA FILES CONFIGURATION (STABLE FOR RENDER) ---
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-# Django 5.x naya rasta (STORAGES dictionary)
-# FIX: 'CompressedManifest' ki jagah simple 'Compressed' use kiya hai missing map files se bachne ke liye
+# Django 5.x Storage Configuration
+# FIX: WhiteNoise ko humne 'StaticFilesStorage' par set kiya hai. 
+# Yeh 'Compressed' version se zyada stable hai aur missing vendor files par build fail nahi karta.
 STORAGES = {
     "default": {
         "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
     },
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+        "BACKEND": "whitenoise.storage.StaticFilesStorage",
     },
 }
 
-# WhiteNoise ko command dena ki missing map files par build na roke
+# WhiteNoise ko command dena ki agar koi file na mile toh ghabraye nahi
 WHITENOISE_MANIFEST_STRICT = False
+WHITENOISE_USE_FINDERS = True
 
-# Backward compatibility (Render build check ke liye)
+# Backward compatibility (Render ke environment ke liye)
+STATICFILES_STORAGE = 'whitenoise.storage.StaticFilesStorage'
 DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
