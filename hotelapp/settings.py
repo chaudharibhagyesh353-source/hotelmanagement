@@ -122,24 +122,28 @@ USE_I18N = True
 USE_TZ = True
 
 
-# --- STATIC & MEDIA FILES CONFIGURATION (UPDATED FOR DJANGO 5.2) ---
+# --- STATIC & MEDIA FILES CONFIGURATION (UPDATED FOR DJANGO 5.2 & RENDER FIX) ---
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Django 5.x naya rasta (STORAGES dictionary)
+# FIX: 'CompressedManifest' ki jagah simple 'Compressed' use kiya hai missing map files se bachne ke liye
 STORAGES = {
     "default": {
         "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
     },
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     },
 }
 
-# Backward compatibility (Render build fix ke liye)
+# WhiteNoise ko command dena ki missing map files par build na roke
+WHITENOISE_MANIFEST_STRICT = False
+
+# Backward compatibility (Render build check ke liye)
 DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
