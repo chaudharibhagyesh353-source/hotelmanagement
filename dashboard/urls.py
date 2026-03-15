@@ -4,6 +4,9 @@ from django.conf import settings
 from django.conf.urls.static import static
 from . import views
 
+# NEW: Flutter app login ke liye Token views import karein
+from rest_framework.authtoken import views as auth_views_drf
+
 urlpatterns = [
     # 1. Authentication (Login/Logout/Register)
     path('', auth_views.LoginView.as_view(template_name='dashboard/login.html'), name='login'),
@@ -53,8 +56,11 @@ urlpatterns = [
     # Bill Settlement & Table Reset Logic
     path('api/settle-bill/', views.settle_bill_api, name='settle_bill_api'),
 
-    # ─── 5. NEW: MOBILE APP (FLUTTER) APIs ───
-    # In endpoints ko aapka Flutter app hit karega data lene ke liye
+    # ─── 5. UPDATED: MOBILE APP (FLUTTER) APIs ───
+    # Isi endpoint par Flutter app username/password bhejkar Token lega
+    path('api/v1/login/', auth_views_drf.obtain_auth_token, name='api_login'),
+    
+    # Data fetch karne ke liye endpoints
     path('api/v1/menu-items/', views.get_menu_api, name='api_menu_items'),
     path('api/v1/tables-status/', views.get_tables_api, name='api_tables_status'),
     path('api/v1/restaurant-profile/', views.get_profile_api, name='api_profile'),

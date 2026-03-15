@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     
     # Third Party Apps
     'rest_framework',      # For Flutter App APIs
+    'rest_framework.authtoken',
     'cloudinary',          # For permanent image storage
     'corsheaders',         # To allow Flutter app connections
     
@@ -179,3 +180,11 @@ LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'login'
 LOGOUT_ON_GET = True
+
+# Django Rest Framework Settings
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication', # Mobile/Flutter ke liye
+        'rest_framework.authentication.SessionAuthentication', # Web Dashboard ke liye
+    ],
+}
