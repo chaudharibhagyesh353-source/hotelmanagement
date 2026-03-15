@@ -156,9 +156,9 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # SDK configuration for manual uploads
 cloudinary.config(
-    cloud_name = 'dsf6jykmx',
-    api_key = '942971569282224',
-    api_secret = 'rsRxF5AMCCpO0nAgRyHVHmtVaMI',
+    os.environ.get('CLOUDINARY_CLOUD_NAME'),
+    api_key = os.environ.get('CLOUDINARY_API_KEY'),
+    api_secret = os.environ.get('CLOUDINARY_API_SECRET'),
     secure = True
 )
 
