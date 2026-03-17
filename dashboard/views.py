@@ -11,15 +11,16 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Sum
 from django.utils import timezone
 from django.contrib.auth.models import User 
-from django.contrib.auth import update_session_auth_hash 
+from django.contrib.auth import update_session_auth_hash, authenticate
 
 # Internal Imports
 from .models import Table, MenuItem, StaffMember, Order, Category, MenuItemVariant, RestaurantProfile
 
 # ─── NEW: FLUTTER API IMPORTS ───
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from rest_framework.authtoken.models import Token
 from .serializers import MenuItemSerializer, TableSerializer, RestaurantProfileSerializer
 
 # ─── HELPER: GET DATA OWNER (SaaS Logic) ───
@@ -29,7 +30,7 @@ def get_data_owner(request):
         return request.user.staff_profile.owner
     return request.user
 
-# ─── CUSTOM DECORATOR: ACCESS CONTROL ───
+# ─── CUSTOM DECORATOR: ACCESS CONTROL (WEB ONLY) ───
 def owner_only(view_func):
     """Sirf Restaurant Owners ke liye, Staff ke liye nahi."""
     @wraps(view_func)
@@ -195,6 +196,7 @@ def menu_manager(request):
     }
 
     return render(request, 'dashboard/menu_manager.html', context)
+
 # 5. Settings View
 @login_required
 @owner_only
@@ -236,7 +238,7 @@ def settings_view(request):
         'active_page': 'settings'
     })
 
-# 6. Kitchen Display
+# 6. Kitchen Display (Staff accessible)
 @login_required
 def kitchen_orders(request):
     owner = get_data_owner(request)
@@ -251,7 +253,7 @@ def kitchen_orders(request):
     }
     return render(request, 'dashboard/kitchen.html', context)
 
-# 7. Floor Plan (UPDATED: Number to Name)
+# 7. Floor Plan
 @login_required
 @owner_only
 def floor_plan(request):
@@ -273,13 +275,18 @@ def floor_plan(request):
     context = {'tables': Table.objects.filter(user=request.user), 'active_page': 'floor_plan'}
     return render(request, 'dashboard/floor_plan.html', context)
 
-# 8. Order Placement API (UPDATED: Queries by Name)
+# 8. Order Placement API
 @csrf_exempt
 def place_order_api(request):
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
-            owner = get_data_owner(request) if request.user.is_authenticated else User.objects.get(username=data['username'])
+            # SaaS Logic: Web ya Mobile staff use kar sakta hai
+            if request.user.is_authenticated:
+                owner = get_data_owner(request)
+            else:
+                owner = User.objects.get(username=data['username'])
+            
             table = Table.objects.get(user=owner, name=data['table_num']) 
             payload = {'items': data['items'], 'customer_phone': data.get('phone_number', 'Staff Order')}
             Order.objects.create(user=owner, table=table, items_json=json.dumps(payload), total_price=Decimal(str(data['total'])))
@@ -300,14 +307,14 @@ def billing_pos(request):
     context = {
         'menu_items': MenuItem.objects.filter(user=request.user),
         'tables': Table.objects.filter(user=request.user),
-        'categories': Category.objects.filter(user=request.user),
+        'categories': Category.objects.filter(user=owner if 'owner' in locals() else request.user),
         'orders': active_orders, 
         'active_page': 'billing',
         'profile': profile
     }
     return render(request, 'dashboard/billing_pos.html', context)
 
-# 10. APIs and Utils (UPDATED: Settle Bill queries by Name)
+# 10. APIs and Utils
 @csrf_exempt
 @login_required
 def settle_bill_api(request):
@@ -388,12 +395,30 @@ def latest_orders_api(request):
     return JsonResponse({'total_pending': Order.objects.filter(user=request.user, status='pending').count(), 'total_sales': float(total_sales), 'new_activities': new_activities})
 
 
-# ─── 11. NEW: FLUTTER MOBILE APP APIs ───
+# ─── 11. NEW: FLUTTER MOBILE APP APIs (ENHANCED ROLE ACCESS) ───
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def mobile_login(request):
+    """Flutter app ke liye custom login jo ROLE bhi return karega."""
+    username = request.data.get('username')
+    password = request.data.get('password')
+    user = authenticate(username=username, password=password)
+    
+    if user:
+        token, _ = Token.objects.get_or_create(user=user)
+        # Role check: Agar staff profile hai toh admin nahi hai
+        is_admin = not hasattr(user, 'staff_profile')
+        return Response({
+            'token': token.key,
+            'is_admin': is_admin,
+            'username': user.username
+        })
+    return Response({'error': 'Invalid Credentials'}, status=401)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_menu_api(request):
-    """Flutter app ke liye full menu list with Cloudinary URLs."""
     owner = get_data_owner(request)
     items = MenuItem.objects.filter(user=owner).prefetch_related('variants')
     serializer = MenuItemSerializer(items, many=True)
@@ -402,7 +427,6 @@ def get_menu_api(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_tables_api(request):
-    """Flutter app ke liye table list aur status (Occupied/Available)."""
     owner = get_data_owner(request)
     tables = Table.objects.filter(user=owner)
     serializer = TableSerializer(tables, many=True)
@@ -411,8 +435,27 @@ def get_tables_api(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_profile_api(request):
-    """Restaurant settings (GST, Name, Currency) Flutter app ke liye."""
+    # Staff ko bhi profile dekhne denge (tax/currency info ke liye)
     owner = get_data_owner(request)
     profile, created = RestaurantProfile.objects.get_or_create(user=owner)
     serializer = RestaurantProfileSerializer(profile)
     return Response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_orders_api(request):
+    """Mobile app history ke liye orders list."""
+    owner = get_data_owner(request)
+    orders = Order.objects.filter(user=owner).order_by('-created_at')[:50]
+    data = []
+    for o in orders:
+        items_data = json.loads(o.items_json) if o.items_json else {}
+        data.append({
+            'id': o.id,
+            'table_number': o.table.name,
+            'total': o.total_price,
+            'status': o.status,
+            'created_at': o.created_at,
+            'items_summary': ", ".join([f"{i['name']} x{i['quantity']}" for i in items_data.get('items', [])])
+        })
+    return Response(data)

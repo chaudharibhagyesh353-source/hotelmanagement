@@ -3,9 +3,11 @@ Django settings for hotelapp project.
 """
 import os
 import dj_database_url
-import cloudinary # SDK configuration ke liye
+import cloudinary 
 import cloudinary.uploader
 import cloudinary.api
+import firebase_admin # NEW: Firebase Admin SDK ✅
+from firebase_admin import credentials # NEW: Firebase credentials ✅
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -14,6 +16,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # --- Load .env file explicitly ---
 load_dotenv(BASE_DIR / '.env')
+
+# --- NEW: FIREBASE ADMIN SDK INITIALIZATION --- ✅
+# Is block se Django aur Firebase aapas mein connect ho jayenge
+try:
+    # Maan lijiye aapne file ka naam 'firebase_key.json' rakha hai
+    FIREBASE_KEY_PATH = os.path.join(BASE_DIR, 'firebase_key.json')
+    
+    if os.path.exists(FIREBASE_KEY_PATH):
+        cred = credentials.Certificate(FIREBASE_KEY_PATH)
+        firebase_admin.initialize_app(cred)
+        print("Successfully connected to Firebase Admin SDK!")
+    else:
+        print("Warning: Firebase key file not found at", FIREBASE_KEY_PATH)
+except Exception as e:
+    print(f"Error initializing Firebase: {e}")
+
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-a#v2bu#7^dmdm&)h=9*%q+j*v7v_&!()*sty=f(n=05=g%opmh')
@@ -45,10 +63,10 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     
     # Third Party Apps
-    'rest_framework',      # For Flutter App APIs
+    'rest_framework',      
     'rest_framework.authtoken',
-    'cloudinary',          # For permanent image storage
-    'corsheaders',         # To allow Flutter app connections
+    'cloudinary',          
+    'corsheaders',         
     
     # Internal Apps
     'dashboard',
@@ -57,7 +75,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
-    'corsheaders.middleware.CorsMiddleware', # Position is important
+    'corsheaders.middleware.CorsMiddleware', 
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -123,14 +141,11 @@ USE_I18N = True
 USE_TZ = True
 
 
-# --- STATIC & MEDIA FILES CONFIGURATION (STABLE FOR RENDER) ---
+# --- STATIC & MEDIA FILES CONFIGURATION ---
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-# Django 5.x Storage Configuration
-# FIX: WhiteNoise ko humne 'StaticFilesStorage' par set kiya hai. 
-# Yeh 'Compressed' version se zyada stable hai aur missing vendor files par build fail nahi karta.
 STORAGES = {
     "default": {
         "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
@@ -140,11 +155,9 @@ STORAGES = {
     },
 }
 
-# WhiteNoise ko command dena ki agar koi file na mile toh ghabraye nahi
 WHITENOISE_MANIFEST_STRICT = False
 WHITENOISE_USE_FINDERS = True
 
-# Backward compatibility (Render ke environment ke liye)
 STATICFILES_STORAGE = 'whitenoise.storage.StaticFilesStorage'
 DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
@@ -152,9 +165,7 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 
-# --- UPDATED: ROBUST CLOUDINARY CONFIGURATION ---
-
-# SDK configuration for manual uploads
+# --- ROBUST CLOUDINARY CONFIGURATION ---
 cloudinary.config(
     cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME',),
     api_key = os.environ.get('CLOUDINARY_API_KEY'),
@@ -162,7 +173,6 @@ cloudinary.config(
     secure = True
 )
 
-# Django-Cloudinary-Storage configuration
 CLOUDINARY_STORAGE = {
     'CLOUDINARY_CLOUD_NAME': os.environ.get('CLOUDINARY_CLOUD_NAME'),
     'CLOUDINARY_API_KEY': os.environ.get('CLOUDINARY_API_KEY'),
@@ -184,7 +194,7 @@ LOGOUT_ON_GET = True
 # Django Rest Framework Settings
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication', # Mobile/Flutter ke liye
-        'rest_framework.authentication.SessionAuthentication', # Web Dashboard ke liye
+        'rest_framework.authentication.TokenAuthentication', 
+        'rest_framework.authentication.SessionAuthentication', 
     ],
 }
