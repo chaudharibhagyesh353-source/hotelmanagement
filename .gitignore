@@ -12,4 +12,5 @@ staticfiles/
 .DS_Store
 
 # Environment variables
+.envfirebase_key.json
 .env

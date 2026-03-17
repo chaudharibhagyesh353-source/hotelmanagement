@@ -307,7 +307,7 @@ def billing_pos(request):
     context = {
         'menu_items': MenuItem.objects.filter(user=request.user),
         'tables': Table.objects.filter(user=request.user),
-        'categories': Category.objects.filter(user=owner if 'owner' in locals() else request.user),
+        'categories': Category.objects.filter(user=request.user),
         'orders': active_orders, 
         'active_page': 'billing',
         'profile': profile
