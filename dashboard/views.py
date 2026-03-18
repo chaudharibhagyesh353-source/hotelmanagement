@@ -238,7 +238,7 @@ def settings_view(request):
         'active_page': 'settings'
     })
 
-# 6. Kitchen Display (Staff accessible)
+# 6. Kitchen Display (Staff accessible - WEB)
 @login_required
 def kitchen_orders(request):
     owner = get_data_owner(request)
@@ -275,13 +275,12 @@ def floor_plan(request):
     context = {'tables': Table.objects.filter(user=request.user), 'active_page': 'floor_plan'}
     return render(request, 'dashboard/floor_plan.html', context)
 
-# 8. Order Placement API
+# 8. Order Placement API (Hybrid: Web/Customer/Mobile)
 @csrf_exempt
 def place_order_api(request):
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
-            # SaaS Logic: Web ya Mobile staff use kar sakta hai
             if request.user.is_authenticated:
                 owner = get_data_owner(request)
             else:
@@ -314,7 +313,7 @@ def billing_pos(request):
     }
     return render(request, 'dashboard/billing_pos.html', context)
 
-# 10. APIs and Utils
+# 10. APIs and Utils (UPDATED FOR FLUTTER COMPATIBILITY)
 @csrf_exempt
 @login_required
 def settle_bill_api(request):
@@ -327,17 +326,20 @@ def settle_bill_api(request):
         return JsonResponse({'status': 'success'})
     return JsonResponse({'status': 'error'}, status=400)
 
-@csrf_exempt
-@login_required
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def update_order_status(request, order_id):
+    """Flutter mobile app aur Web dono ke liye common status updater."""
     owner = get_data_owner(request)
     order = get_object_or_404(Order, id=order_id, user=owner)
-    if request.method == 'POST':
-        new_status = request.POST.get('status')
-        if new_status in ['preparing', 'cooked', 'served']:
-            order.status = new_status; order.save()
-            return JsonResponse({'status': 'success'})
-    return JsonResponse({'status': 'error'}, status=400)
+    
+    # Flutter sends JSON, Web sends Form Data - request.data handles both
+    new_status = request.data.get('status')
+    if new_status in ['placed', 'preparing', 'cooking', 'ready', 'cooked', 'served']:
+        order.status = new_status
+        order.save()
+        return Response({'status': 'success'})
+    return Response({'status': 'error', 'message': 'Invalid status'}, status=400)
 
 @login_required
 def get_order_details_api(request, order_id):
@@ -368,6 +370,36 @@ def customer_menu(request, username, table_name):
         'categories': Category.objects.filter(user=owner)
     })
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def latest_orders_api(request):
+    """UPDATED: Ab ye Flutter app ko real JSON data dega, HTML nahi."""
+    owner = get_data_owner(request)
+    today = timezone.now().date()
+    
+    # Flutter Kitchen Display ke liye active orders fetch karein
+    active_orders = Order.objects.filter(user=owner).exclude(status='served').order_by('-created_at')
+    
+    orders_list = []
+    for o in active_orders:
+        items_data = json.loads(o.items_json) if o.items_json else {}
+        orders_list.append({
+            'id': o.id,
+            'table_number': o.table.name,
+            'total': float(o.total_price),
+            'status': o.status,
+            'created_at': o.created_at.isoformat(),
+            'items_summary': ", ".join([f"{i['name']} x{i['quantity']}" for i in items_data.get('items', [])])
+        })
+
+    total_sales = Order.objects.filter(user=owner, status='served', created_at__date=today).aggregate(Sum('total_price'))['total_price__sum'] or 0
+    
+    return Response({
+        'orders': orders_list, 
+        'total_pending': active_orders.filter(status='pending').count(), 
+        'total_sales': float(total_sales)
+    })
+
 @login_required
 @owner_only
 def order_history(request):
@@ -377,22 +409,6 @@ def order_history(request):
         data = json.loads(o.items_json) if o.items_json else {}
         history_list.append({'order': o, 'phone': data.get('customer_phone', 'N/A'), 'items': data.get('items', [])})
     return render(request, 'dashboard/history.html', {'history_data': history_list, 'active_page': 'history'})
-
-@login_required
-def latest_orders_api(request):
-    today = timezone.now().date()
-    new_orders = Order.objects.filter(user=request.user, is_notified=False)
-    new_activities = []
-    for order in new_orders:
-        new_activities.append({
-            'action': f"New Order: Table {order.table.name}", 
-            'amount': f"{order.total_price}", 
-            'table': order.table.name, 
-            'id': order.id
-        })
-        order.is_notified = True; order.save()
-    total_sales = Order.objects.filter(user=request.user, status='served', created_at__date=today).aggregate(Sum('total_price'))['total_price__sum'] or 0
-    return JsonResponse({'total_pending': Order.objects.filter(user=request.user, status='pending').count(), 'total_sales': float(total_sales), 'new_activities': new_activities})
 
 
 # ─── 11. NEW: FLUTTER MOBILE APP APIs (ENHANCED ROLE ACCESS) ───
@@ -407,7 +423,6 @@ def mobile_login(request):
     
     if user:
         token, _ = Token.objects.get_or_create(user=user)
-        # Role check: Agar staff profile hai toh admin nahi hai
         is_admin = not hasattr(user, 'staff_profile')
         return Response({
             'token': token.key,
@@ -435,7 +450,6 @@ def get_tables_api(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_profile_api(request):
-    # Staff ko bhi profile dekhne denge (tax/currency info ke liye)
     owner = get_data_owner(request)
     profile, created = RestaurantProfile.objects.get_or_create(user=owner)
     serializer = RestaurantProfileSerializer(profile)
@@ -453,7 +467,7 @@ def get_orders_api(request):
         data.append({
             'id': o.id,
             'table_number': o.table.name,
-            'total': o.total_price,
+            'total': float(o.total_price),
             'status': o.status,
             'created_at': o.created_at,
             'items_summary': ", ".join([f"{i['name']} x{i['quantity']}" for i in items_data.get('items', [])])
