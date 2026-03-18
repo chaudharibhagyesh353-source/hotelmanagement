@@ -333,7 +333,6 @@ def update_order_status(request, order_id):
     owner = get_data_owner(request)
     order = get_object_or_404(Order, id=order_id, user=owner)
     
-    # Flutter sends JSON, Web sends Form Data - request.data handles both
     new_status = request.data.get('status')
     if new_status in ['placed', 'preparing', 'cooking', 'ready', 'cooked', 'served']:
         order.status = new_status
@@ -373,30 +372,38 @@ def customer_menu(request, username, table_name):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def latest_orders_api(request):
-    """UPDATED: Ab ye Flutter app ko real JSON data dega, HTML nahi."""
+    """SAFE PARSING VERSION: Crash-proof logic for Flutter kitchen display."""
     owner = get_data_owner(request)
     today = timezone.now().date()
     
-    # Flutter Kitchen Display ke liye active orders fetch karein
     active_orders = Order.objects.filter(user=owner).exclude(status='served').order_by('-created_at')
     
     orders_list = []
     for o in active_orders:
         items_data = json.loads(o.items_json) if o.items_json else {}
+        items_list = items_data.get('items', [])
+        
+        # SAFE SUMMARY LOGIC: Prevents KeyError if 'quantity' or 'name' is missing ✅
+        summary_parts = []
+        for i in items_list:
+            name = i.get('name', i.get('menu_item_name', 'Unknown Item'))
+            qty = i.get('quantity', i.get('qty', 1))
+            summary_parts.append(f"{name} x{qty}")
+
         orders_list.append({
             'id': o.id,
-            'table_number': o.table.name,
+            'table_number': o.table.name if o.table else "N/A",
             'total': float(o.total_price),
             'status': o.status,
             'created_at': o.created_at.isoformat(),
-            'items_summary': ", ".join([f"{i['name']} x{i['quantity']}" for i in items_data.get('items', [])])
+            'items_summary': ", ".join(summary_parts)
         })
 
     total_sales = Order.objects.filter(user=owner, status='served', created_at__date=today).aggregate(Sum('total_price'))['total_price__sum'] or 0
     
     return Response({
         'orders': orders_list, 
-        'total_pending': active_orders.filter(status='pending').count(), 
+        'total_pending': active_orders.filter(status='placed').count(), 
         'total_sales': float(total_sales)
     })
 
@@ -458,18 +465,23 @@ def get_profile_api(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_orders_api(request):
-    """Mobile app history ke liye orders list."""
+    """Mobile app history ke liye orders list - SAFE VERSION ✅"""
     owner = get_data_owner(request)
     orders = Order.objects.filter(user=owner).order_by('-created_at')[:50]
     data = []
     for o in orders:
         items_data = json.loads(o.items_json) if o.items_json else {}
+        items_list = items_data.get('items', [])
+        
+        # Safe summary logic
+        summary = ", ".join([f"{i.get('name', 'Item')} x{i.get('quantity', 1)}" for i in items_list])
+        
         data.append({
             'id': o.id,
-            'table_number': o.table.name,
+            'table_number': o.table.name if o.table else "N/A",
             'total': float(o.total_price),
             'status': o.status,
             'created_at': o.created_at,
-            'items_summary': ", ".join([f"{i['name']} x{i['quantity']}" for i in items_data.get('items', [])])
+            'items_summary': summary
         })
     return Response(data)
