@@ -423,17 +423,29 @@ def order_history(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def mobile_login(request):
-    """Flutter app ke liye custom login jo ROLE bhi return karega."""
+    """
+    FIXED: Custom login jo 'role' return karta hai.
+    Agar owner login karega toh 'Owner' ayega, staff karega toh unka specific role.
+    """
     username = request.data.get('username')
     password = request.data.get('password')
     user = authenticate(username=username, password=password)
     
     if user:
         token, _ = Token.objects.get_or_create(user=user)
-        is_admin = not hasattr(user, 'staff_profile')
+        
+        # Check if user is Staff
+        if hasattr(user, 'staff_profile'):
+            is_admin = False
+            role = user.staff_profile.role # Waiter, Chef, etc.
+        else:
+            is_admin = True
+            role = "Owner"
+
         return Response({
             'token': token.key,
             'is_admin': is_admin,
+            'role': role,
             'username': user.username
         })
     return Response({'error': 'Invalid Credentials'}, status=401)
@@ -457,10 +469,21 @@ def get_tables_api(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_profile_api(request):
+    """
+    FIXED: Role information added to profile response.
+    """
     owner = get_data_owner(request)
     profile, created = RestaurantProfile.objects.get_or_create(user=owner)
+    
+    is_staff = hasattr(request.user, 'staff_profile')
+    user_role = request.user.staff_profile.role if is_staff else "Owner"
+    
     serializer = RestaurantProfileSerializer(profile)
-    return Response(serializer.data)
+    data = serializer.data
+    data['user_role'] = user_role
+    data['is_staff'] = is_staff
+    
+    return Response(data)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
